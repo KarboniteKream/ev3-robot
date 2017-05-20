@@ -48,7 +48,7 @@ def set_motors(left_speed, right_speed):
 
 
 def set_motor(motor, speed):
-    speed = max(MIN_SPEED, min(speed, MAX_SPEED))
+    speed = max(-MAX_SPEED, min(speed, MAX_SPEED))
     motor.duty_cycle_sp = speed
     motor.run_direct()
 
@@ -60,16 +60,20 @@ def stop_motors():
     time.sleep(BREAK_TIME)
 
 
-def move_forward():
+def move():
     global ACCELERATION_STEP_SPEED
     global GYRO_ERROR
 
     base_speed = START_SPEED
     time_acceleration = 0.0
+
     angle_goal = 0
     integral = 0.0
     previous_angle_error = 0.0
-    on_line = False
+
+    current_line = 0
+    line = False
+    time_line = 0.0
 
     while True:
         time_start = time.time()
@@ -93,10 +97,10 @@ def move_forward():
 
         proportion = angle_error
         # TODO: Should 'integral' be limited?
-        integral = (I_FORWARD_FACTOR * integral) + angle_error
+        integral = (I_MOVE_FACTOR * integral) + angle_error
         derivative = angle_error - previous_angle_error
         previous_angle_error = angle_error
-        speed_correction = P_FORWARD * proportion + I_FORWARD * integral + D_FORWARD * derivative
+        speed_correction = P_MOVE * proportion + I_MOVE * integral + D_MOVE * derivative
 
         left_speed += speed_correction
         right_speed -= speed_correction
@@ -108,10 +112,30 @@ def move_forward():
 
         color = COLOR.value()
 
-        if not on_line and color < LINE_COLOR:
-            on_line = True
-        elif on_line and color > FLOOR_COLOR:
-            on_line = False
+        if not line and color < LINE_COLOR:
+            line = True
+            time_line = 0.0
+            current_line += 1
+
+        if line and time_line > LINE_TIME and color > FLOOR_COLOR:
+            if current_line == END_LINE:
+                break
+
+            line = False
+
+            if current_line in ROTATION_LINES:
+                line = False
+
+                stop_motors()
+
+                base_speed = START_SPEED
+                time_acceleration = 0.0
+
+                angle_goal = 180 if (angle_goal == 0) else 0
+                integral = 0.0
+                previous_angle_error = 0.0
+
+                continue
 
         time_diff = time.time() - time_start
         if time_diff < LOOP_TIME:
@@ -119,6 +143,7 @@ def move_forward():
 
         time_step = max(time_diff, LOOP_TIME)
         time_acceleration += time_step
+        time_line += time_step
 
         GYRO_ERROR += GYRO_ERROR_RATE
 
@@ -126,7 +151,6 @@ def move_forward():
 LOOP_TIME = 0.01
 GYRO_NUM_CALIBRATION_LOOPS = 500
 
-MIN_SPEED = 10.0
 START_SPEED = 30.0
 SPEED = 90.0
 MAX_SPEED = 100.0
@@ -138,17 +162,21 @@ ACCELERATION_STEP_SPEED = 5.0
 ACCELERATION_STEP_SPEED_FACTOR = 1.0
 
 LINE_COLOR = 10
+LINE_TIME = 0.30
 FLOOR_COLOR = 20
 
-P_FORWARD = 1.0
-I_FORWARD = 0.1
-I_FORWARD_FACTOR = 0.75
-D_FORWARD = 0.5
+ROTATION_LINES = [2, 4, 7, 10, 14]
+END_LINE = 18
+
+P_MOVE = 1.0
+I_MOVE = 0.1
+I_MOVE_FACTOR = 0.75
+D_MOVE = 0.5
 
 LEFT_MOTOR, RIGHT_MOTOR = init_motors()
 GYRO, GYRO_ERROR, GYRO_ERROR_RATE = init_gyro()
 COLOR = init_sensors()
 RESET = init_reset()
 
-move_forward()
+move()
 stop_motors()
