@@ -1,5 +1,17 @@
 import ev3dev.ev3 as ev3
 import time
+import subprocess
+
+
+def FastRead(infile):
+    infile.seek(0)
+    return int(infile.read().decode().strip())
+
+
+def FastWrite(outfile, value):
+    outfile.truncate(0)
+    outfile.write(str(int(value)))
+    outfile.flush()
 
 
 def init_motors():
@@ -43,20 +55,21 @@ def init_reset():
 
 
 def set_motors(left_speed, right_speed):
-    set_motor(LEFT_MOTOR, left_speed)
-    set_motor(RIGHT_MOTOR, right_speed)
+    set_motor(LEFT, left_speed)
+    set_motor(RIGHT, right_speed)
 
 
 def set_motor(motor, speed):
     speed = max(-MAX_SPEED, min(speed, MAX_SPEED))
-    motor.duty_cycle_sp = speed
-    motor.run_direct()
+    FastWrite(motor, speed)
+    # motor.duty_cycle_sp = speed
+    # motor.run_direct()
 
 
 def stop_motors():
     set_motors(0.0, 0.0)
-    LEFT_MOTOR.stop(stop_action="brake")
-    RIGHT_MOTOR.stop(stop_action="brake")
+    # LEFT_MOTOR.stop(stop_action="brake")
+    # RIGHT_MOTOR.stop(stop_action="brake")
     time.sleep(BREAK_TIME)
 
 
@@ -139,7 +152,7 @@ def move():
                 continue
 
         time_diff = time.time() - time_start
-        F.write(str("%.2f" % time_diff))
+        F.write(str("%.2f\n" % time_diff))
         if time_diff < LOOP_TIME:
             time.sleep(LOOP_TIME - time_diff)
 
@@ -180,11 +193,11 @@ def rotate(angle_goal):
         if abs(speed_correction) < asd:
             speed_correction = asd if (speed_correction > 0) else -asd
 
-        qwe = 50.0
+        qwe = 45.0
         if abs(speed_correction) > qwe:
             speed_correction = qwe if (speed_correction > 0) else -qwe
 
-        F.write("%.2f %.2f %.2f %.2f %.2f" %
+        F.write("%.2f %.2f %.2f %.2f %.2f\n" %
                 (angle, angle_error, integral, derivative, speed_correction))
 
         # TODO: Move up.
@@ -197,7 +210,7 @@ def rotate(angle_goal):
         set_motors(left_speed, right_speed)
 
         time_diff = time.time() - time_start
-        F.write(str("%.2f" % time_diff))
+        F.write(str("%.2f\n" % time_diff))
         if time_diff < LOOP_TIME:
             time.sleep(LOOP_TIME - time_diff)
 
@@ -208,7 +221,7 @@ def rotate(angle_goal):
     stop_motors()
 
 
-LOOP_TIME = 0.02
+LOOP_TIME = 0.01
 GYRO_NUM_CALIBRATION_LOOPS = 500
 
 START_SPEED = 40.0
@@ -228,15 +241,15 @@ FLOOR_COLOR = 20
 ROTATION_LINES = [2, 4, 7, 10, 14]
 END_LINE = 18
 
-# P_MOVE = 1.2
-# I_MOVE = 0.1
-# I_MOVE_FACTOR = 0.75
-# D_MOVE = 0.5
+P_MOVE = 1.2
+I_MOVE = 0.1
+I_MOVE_FACTOR = 0.75
+D_MOVE = 0.5
 
-P_MOVE = 1.65
-I_MOVE = 0.066
-I_MOVE_FACTOR = 1.0
-D_MOVE = 10.3125
+# P_MOVE = 1.65
+# I_MOVE = 0.066
+# I_MOVE_FACTOR = 1.0
+# D_MOVE = 10.3125
 
 P_ROTATE = 1.0
 I_ROTATE = 0.0
@@ -245,10 +258,36 @@ D_ROTATE = 0.0
 
 LEFT_MOTOR, RIGHT_MOTOR = init_motors()
 GYRO, GYRO_ERROR, GYRO_ERROR_RATE = init_gyro()
+print(GYRO_ERROR_RATE)
 COLOR = init_sensors()
 RESET = init_reset()
 
+subprocess.call(['./makelinks.sh'])
+
 F = open("./Output/PID", "w")
+
+LEFT = open("ev3devices/outA/duty_cycle_sp", "w")
+RIGHT = open("ev3devices/outD/duty_cycle_sp", "w")
+
+# Reset the motors
+with open('ev3devices/outA/command', 'w') as f:
+    f.write('reset')
+with open('ev3devices/outD/command', 'w') as f:
+    f.write('reset')
+time.sleep(0.01)
+
+# Set motors in run-direct mode
+with open('ev3devices/outA/polarity', 'w') as f:
+    f.write('inversed')
+with open('ev3devices/outD/polarity', 'w') as f:
+    f.write('inversed')
+time.sleep(0.01)
+
+# Set motors in run-direct mode
+with open('ev3devices/outA/command', 'w') as f:
+    f.write('run-direct')
+with open('ev3devices/outD/command', 'w') as f:
+    f.write('run-direct')
 
 move()
 
